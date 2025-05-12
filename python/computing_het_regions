@@ -1,0 +1,30 @@
+# Firstly, chromosome VCFs were filtered using bash
+bcftools view -e 'IDV>0' -Ou chr31.raw.vcf.gz | bcftools filter -S .  -e 'GQ<30|FORMAT/DP<10|FORMAT/DP<50' -Oz -o chr31_reg.vcf.gz
+# Which filters the VCF into a file called chr31_reg.vcf.gz (replace with whatever name you like)
+# You could also filter here to keep only parents
+
+import numpy as np
+from cyvcf2 import VCF
+import pandas as pd 
+import subprocess
+import os
+
+# Define the function to create windows on the chromsome (from Thomas Decroly)
+def create_windows(window_size, chr_len, chr_name):
+    """Create windows"""
+
+    window_starts = np.array([*range(0, int(chr_len), window_size)]) + 1
+    window_ends = np.array([*range(0 + window_size, int(chr_len) + window_size, window_size)])
+    window_ends[-1] = int(chr_len)
+    windows = list(zip([chr_name for i in range(len(window_starts))], window_starts, window_ends))
+    return windows
+
+  # Define the function to find heterozygous individuals (from Thomas Decroly)
+  def find_hets(variant):
+    hets = np.empty(len(variant.genotypes), dtype=int)
+    for i, genotype in enumerate(variant.genotypes):
+        hets[i] = 1 if genotype[0] != genotype[1] else 0
+        
+    return hets
+
+  
