@@ -3,7 +3,7 @@ from cyvcf2 import VCF
 import pandas as pd 
 import subprocess
 
-# Define function to find heterozygous genotypes
+# Define function to find heterozygous genotypes (from Thomas Decroly)
 def find_hets(variant):
     hets = np.empty(len(variant.genotypes), dtype=int)
     for i, genotype in enumerate(variant.genotypes):
@@ -15,7 +15,7 @@ def find_hets(variant):
 chrom_num = 'chr31'
 vcf_file = (f'actual_data/brood2/{chrom_num}.raw.vcf.gz')
 
-# Gives the list of individuals in the VCF
+# Gives the list of individuals in the VCF (from Thomas Decroly)
 _stdout = subprocess.check_output(f"bcftools query -l {vcf_file}", shell=True, text=True)
 samples = np.array([sample_id for sample_id in _stdout.split("\n") if sample_id], dtype=str)
 samples
