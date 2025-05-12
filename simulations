@@ -1,0 +1,59 @@
+#This is more a list of commands than a formtted script 
+
+#To simulate individuals for testing the code to find mutations:
+
+#Create reference of random ATGC sequence using specified probabilities in R Studio
+
+#Create and activate env
+
+#Import bwa, dwgsim, samtools, bcftools, tabix and sambamba
+
+#Create directories to organise assemblies, reads, alignments and variants 
+
+#Use dwgsim to simulate the genomes of individuals (use --help comamand to investigate options)
+#ref.fa is the reference genome
+dwgsim -z 76196 -d 350 -C 20 -1 150 -2 150 -r 0.003 -R 0 -c 0 -o 1 0_assemblies/ref.fa 1_reads/ind_1
+dwgsim -z 90218 -d 350 -C 20 -1 150 -2 150 -r 0.003 -R 0 -c 0 -o 1 0_assemblies/ref.fa 1_reads/ind_2
+dwgsim -z 24244 -d 350 -C 20 -1 150 -2 150 -r 0.003 -R 0 -c 0 -o 1 0_assemblies/ref.fa 1_reads/ind_3
+
+#Use bwa to index reference for easier alignment 
+bwa index 0_assemblies/ref.fa
+
+#Create a nanofile "ids.txt", and add in the prefixes used in dwgsim (ind_1, ind_2, ind_3 etc)
+
+#Align with bwa.sh script (put it in a nano file)
+
+# bwa.sh
+#!/bin/bash
+
+id=$1
+
+bwa mem -R "@RG\tID:$id\tSM:$id" 0_assemblies/ref.fa 1_reads/$id.bwa.read1.fastq.gz 1_reads/$id.bwa.read2.fastq.gz | samtools view -q 1 -b - | samtools sort > 2_alignments/$id.vs.ref.bam
+
+sambamba markdup 2_alignments/$id.vs.ref.bam 2_alignments/$id.vs.ref.MD.bam
+
+samtools index 2_alignments/$id.vs.ref.MD.bam
+samtools flagstat 2_alignments/$id.vs.ref.MD.bam > 2_alignments/$id.vs.ref.flagstat
+
+
+while read id; do bash bwa.sh $id; done < ids.txt
+
+#create a nanofile "bam.list", and add in the list of files created by bwa.sh (eg 2_alignments/ind_1.vs.ref.MD.bam)
+
+#turn alignments into a VCF that can be run through the code to identify mutations
+bcftools mpileup -f 0_assemblies/ref.fa --annotate FORMAT/DP,FORMAT/AD --bam-list bam.list | bcftools call -m -f GQ -Oz -o 4_variants/test.vcf.gz
+
+#the same pipeline was used to create simulations for estimating callability, but with different dwgsim parameters:
+#  A different random seed was used for each individual 
+#  Distance between outer ends of pairs was 350 
+#  Mean coverage was done according to average depth of each individual on the relevant chromosome 
+#  Lengths of first and second reads set to 146 
+#  Reads generated for Illumina 
+#  Error rate of 0.01 to mimic Illumina sequencing 
+#  Fraction of mutations that were indels was 0.0 
+#  Per-read-end (bwa only) output type for FASTQ files 
+#  Base quality standard deviation set according to the base quality standard deviation of each individual on the relevant chromosome 
+
+#Code used to get chunks of the reference genome (here, it's putting position 9 million to 10 million for chromosome 2 of the Danaus chrysippus reference genome into a file called chr02_1milbp.fa)
+samtools faidx Dchry2.3.fa chr02:9000000-10000000 > 0_assemblies/chr02_1milbp.fa  
+
