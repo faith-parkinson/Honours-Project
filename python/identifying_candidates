@@ -1,0 +1,86 @@
+import numpy as np
+from cyvcf2 import VCF
+import pandas as pd 
+import subprocess
+
+# Define function to find heterozygous genotypes
+def find_hets(variant):
+    hets = np.empty(len(variant.genotypes), dtype=int)
+    for i, genotype in enumerate(variant.genotypes):
+        hets[i] = 1 if genotype[0] != genotype[1] else 0
+        
+    return hets
+
+# Establish the path to the VCF you want to run
+chrom_num = 'chr31'
+vcf_file = (f'actual_data/brood2/{chrom_num}.raw.vcf.gz')
+
+# Gives the list of individuals in the VCF
+_stdout = subprocess.check_output(f"bcftools query -l {vcf_file}", shell=True, text=True)
+samples = np.array([sample_id for sample_id in _stdout.split("\n") if sample_id], dtype=str)
+samples
+
+# Define the individuals in family and the parents by indexing based on the "samples" list
+family1_id = [42, 43, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+family2_id = [4, 42, 43, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 35, 35, 36, 37, 38, 29, 40, 41]
+parents1_id = family1_id[:2]
+parents2_id = family2_id[:3]
+
+# Writes candidate chromosome, position and ID to a file named family01.mut.tsv
+mut_file = open("family01.mut.tsv", 'w')
+mut_file.write('chromosome' + '\t' + 'position' + '\t' +  'ID'  + '\n')
+
+for variant in VCF(vcf_file):
+
+    if variant.is_snp:
+
+        # No individual was called heterozygous (GT) in other broods
+        if variant.INFO.get('AC') == 1: 
+
+            hets = find_hets(variant)
+
+            # Heterozygotes must be in the offspring
+            if sum(hets[parents1_id]) == 0:
+
+                # Find which offspring
+                focal_id = np.where(hets == 1)[0]
+                non_focals_id = [id for id in family1_id[2:] if id not in focal_id]
+                pos_focal_id = focal_id in family1_id
+                if pos_focal_id:
+
+                # Add in all the different filtering criteria 
+                    while True:
+
+                        is_mutation = False
+                        # Parents AD
+                        if not np.all(variant.gt_alt_depths[parents1_id] == 0): break
+                            
+                        # Parents' and focal offspring DP
+                        if not np.all(variant.gt_depths[parents1_id] >= 10) & np.all(variant.gt_depths[parents1_id] <= 150): break        
+                        if not (variant.gt_depths[focal_id] >= 10) & (variant.gt_depths[focal_id] <= 150): break
+                            
+                        # Parents and focal offspring GQ 
+                        if not np.all(variant.gt_quals[parents1_id] >= 50) & (variant.gt_quals[focal_id] >= 50): break
+
+                        # Focal offspring AB
+                        if not (variant.gt_alt_freqs[focal_id] >= 0.2) & (variant.gt_alt_freqs[focal_id] <= 0.8): break
+                            
+                        # Focal offspring AD
+                        if not (variant.gt_alt_depths[focal_id] >= 5): break
+                        
+                        # Focal offspring forward and backward reads
+                        if not ((variant.INFO.get('DP4')[2]) >= 0) & ((variant.INFO.get('DP4')[3]) >= 0): break
+                        
+                        # Nonfocal offspring AD 
+                        if not np.all(variant.gt_alt_depths[non_focals_id] <= 1): break
+                            
+                        # No more than two non-focal offspring can have a read supporting the candidate
+                        if not np.sum(variant.gt_alt_depths[non_focals_id] > 0) <= 2: break
+                        
+                        is_mutation = True
+                        break
+
+                    if is_mutation:
+                        mut_file.write(str(variant.CHROM) + '\t' +  str(variant.POS) + '\t' +  str(samples[focal_id][0]) + '\n')
+                        print(variant.CHROM, variant.POS, samples[focal_id][0])
+mut_file.close() 
