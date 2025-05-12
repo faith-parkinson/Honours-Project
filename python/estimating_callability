@@ -6,7 +6,7 @@ import subprocess
 # Establish file path to the VCF of the simulated mutations
 vcf_file = '4_variants/mil_sim31.vcf.gz'
 
-# Generates a list of individuals in the VCF for selecting individuals by indexing
+# Generates a list of individuals in the VCF for selecting individuals by indexing (from Thomas Decroly)
 _stdout = subprocess.check_output(f"bcftools query -l {vcf_file}", shell=True, text=True)
 samples = np.array([sample_id for sample_id in _stdout.split("\n") if sample_id], dtype=str)
 samples
