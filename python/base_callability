@@ -1,0 +1,85 @@
+# Alter candidates code slightly to get the alternate base of each candidate mutation
+
+mut_file = open("family01.mut.tsv", 'w')
+mut_file.write('chromosome' + '\t' + 'position' + '\t' +  'ID' + '\t' + 'mutation_base' + '\n')
+# at the start of the code and
+mutation_base = variant.ALT[0]  
+mut_file.write(str(variant.CHROM) + '\t' + str(variant.POS) + '\t' + str(samples[focal_id][0]) + '\t' + str(mutation_base) + '\n')
+print(variant.CHROM, variant.POS, samples[focal_id][0], mutation_base)
+# at the end
+
+import pandas as pd
+import os
+
+# For simulated mutations identified in the candidates code, put the files for all chromosomes into a folder, making sure all file names end in .mut.tsv
+
+# Define the path to your files (mine weren't in a folder)
+directory = os.getcwd()
+
+# Find all the .mut.tsv files
+mutation_files = [f for f in os.listdir(directory) if f.endswith('.mut.tsv')]
+
+dfs = []
+
+for file in mutation_files:
+    file_path = os.path.join(directory, mut_file)
+    
+    mut_df = pd.read_csv(file_path, sep='\t')
+    dfs.append(mut_df)
+
+# Combine all the callable simulated mutations into a single dataframe
+all_data = pd.concat(dfs, ignore_index=True)
+
+# Count how many of each base there are 
+base_counts = all_data['mutation_base'].value_counts()
+total = base_counts.sum()
+
+# Calculate base proportions of callable mutations
+proportions = (base_counts / total)
+
+print(proportions)
+
+
+
+# For the raw simulated mutations, add all the VCFs produced automatically by dwgsim detailng the simulated mutations to a folder
+# Similar process to above, but using VCFs instead of TSVs
+directory = '1_reads/kids_muts_vcfs/'
+
+vcf_files = [f for f in os.listdir(directory) if f.endswith('.vcf')]
+
+vcf_data = []
+
+for vcf_file in vcf_files:
+    vcf_path = os.path.join(directory, vcf_file)
+    
+    df = pd.read_csv(vcf_path, sep='\t', comment='#', header=None)
+
+    # Assign VCF column names to the df
+    df.columns = ['CHROM', 'POS', 'ID', 'REF', 'ALT', 'QUAL', 'FILTER', 'INFO'] 
+
+    # Exclude the unecessay columns 
+    df = df[['CHROM', 'POS', 'REF', 'ALT']]
+
+    # Remove ambiguous mutations that wouldn't be picked up by the candidate code regardless of callability
+    df = df[df['ALT'].isin(['A', 'T', 'C', 'G'])]
+
+    # Add all the dataframes together
+    vcf_data.append(df)
+
+
+# Concatenate the dataframe
+combined_vcf = pd.concat(vcf_data, ignore_index=True)
+
+# Count how many of each base there 
+base_counts = combined_vcf['ALT'].value_counts()
+total = base_counts.sum()
+
+# Calculate base proportions of raw simulated mutations
+proportions = (base_counts / total)
+
+print(proportions)
+
+
+
+
+
