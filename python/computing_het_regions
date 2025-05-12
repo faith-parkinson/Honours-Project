@@ -27,4 +27,56 @@ def create_windows(window_size, chr_len, chr_name):
         
     return hets
 
-  
+# Define the file path
+chrom_num = 'chr07'
+vcf_file = (f'actual_data/brood2/{chrom_num}_reg.vcf.gz')
+
+# Retreive chromosome information from the VCF file (From Thomas Decroly)
+data = subprocess.check_output(f"bcftools index -s {vcf_file}", shell=True, text=True)
+chromosomes_info = [x.split('\t') for x in data[:-1].split('\n')]
+chromosomes_info
+
+# Creates the windows along the chromosome (this one is windows of 10000)
+windows = create_windows(10000, chromosomes_info[0][1], chromosomes_info[0][0])
+
+# Gets a list of individuals from the VCF to select individuals via indexing (From Thomas Decroly)
+_stdout = subprocess.check_output(f"bcftools query -l {vcf_file}", shell=True, text=True)
+samples = np.array([sample_id for sample_id in _stdout.split("\n") if sample_id], dtype=str)
+samples
+
+# Writes all the heterozygosity information to a file called {chrom_num}_reg.het.tsv
+# This code could probably be automated to loop over a folder instead of doing each chromosome VCF individually
+het_file = open(f"{chrom_num}_reg.het.tsv", 'w')
+het_file.write('chromosome' + '\t' + 'window start' + '\t' + 'window end' + '\t' + 'diffs' + '\t' + 'comps' + '\t' + 'heterozygosity' + '\t' +  'ID'  + '\n')
+
+# Loop over windows 
+for window in windows:
+    chromosome, window_start, window_end = window
+
+    # Creates places to store the number of comparisons and the number of differences for each window
+    n_samples = len(samples)
+    comp_array, diff_array = np.zeros(n_samples, dtype=int), np.zeros(n_samples, dtype=int)
+
+    print(window_start) # Just to confirm progress
+
+    window_string = f"{window[0]}:{window[1]}-{window[2]}"
+        
+    vcf = VCF(vcf_file)
+
+    # Complies the comparisons and differences in each window
+    for variant in vcf(window_string):
+        for i, genotype in enumerate(variant.genotypes):
+            if not (genotype[0] == -1) & (genotype[1] ==-1):
+                comp_array[i] += 1
+            if genotype[0] != genotype[1]:
+                 diff_array[i] += 1
+        
+
+    heterozygosity = diff_array/comp_array # Calculates heterozygosity
+
+    for i, het in enumerate(heterozygosity): # Adds the heterozygosity information for each window to the file
+        het_file.write(str(chromosome) + '\t' +  str(window_start) + '\t' +  str(window_end) + '\t' + str(diff_array[i]) + '\t' + str(comp_array[i]) + '\t' + str(het) + '\t' +  str(samples[i]) + '\n')
+
+het_file.close()
+
+# Visualised by creating a dataframe from the output of this code, filtering the df to only keep sites where ID == parentID and plotting a standard matplotlib plot
